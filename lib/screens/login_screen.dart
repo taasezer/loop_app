@@ -4,6 +4,7 @@ import '../theme/theme.dart';
 import '../widgets/widgets.dart';
 import '../layouts/main_layout.dart';
 import 'onboarding_screen.dart';
+import 'register_screen.dart';
 import '../services/api_service.dart';
 import '../state/app_state_provider.dart';
 /// Giriş ekranı — tasarımda görülen modal kartı ve arka planı içerir.
@@ -456,6 +457,44 @@ class _LoginCard extends StatelessWidget {
                                 style: GoogleFonts.inter(
                                   fontSize: 13,
                                   color: AppColors.textAccent,
+                                  fontWeight: FontWeight.w600,
+                                  decoration: TextDecoration.none,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  
+                  // Kayıt Ol linki
+                  Center(
+                    child: RichText(
+                      text: TextSpan(
+                        style: GoogleFonts.inter(
+                          fontSize: 13,
+                          color: AppColors.textSecondary,
+                        ),
+                        children: [
+                          const TextSpan(
+                            text: 'Kurye misiniz? ',
+                          ),
+                          WidgetSpan(
+                            alignment: PlaceholderAlignment.baseline,
+                            baseline: TextBaseline.alphabetic,
+                            child: GestureDetector(
+                              onTap: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(builder: (_) => const RegisterScreen())
+                                );
+                              },
+                              child: Text(
+                                'Hemen Kayıt Olun',
+                                style: GoogleFonts.inter(
+                                  fontSize: 13,
+                                  color: AppColors.neonTeal,
                                   fontWeight: FontWeight.w600,
                                   decoration: TextDecoration.none,
                                 ),

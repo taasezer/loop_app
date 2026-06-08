@@ -42,6 +42,39 @@ class ApiService {
     return null;
   }
 
+  Future<UserModel?> register({
+    required String fullName,
+    required String email,
+    required String password,
+    required String phoneNumber,
+    String? supplierCode,
+  }) async {
+    try {
+      final data = {
+        'email': email,
+        'password': password,
+        'full_name': fullName,
+        'phone_number': phoneNumber,
+        'role': 'courier', // Defaulting to courier for this app's registration
+      };
+      
+      if (supplierCode != null && supplierCode.isNotEmpty) {
+        data['supplier_code'] = supplierCode;
+      }
+
+      final response = await _dio.post('/auth/register', data: data);
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        // Automatically login after successful registration
+        return await login(email, password);
+      }
+    } catch (e) {
+      print('Register error: $e');
+      rethrow;
+    }
+    return null;
+  }
+
   Future<UserModel?> getMe() async {
     try {
       final response = await _dio.get('/auth/me');
