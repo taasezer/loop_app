@@ -4,7 +4,8 @@ import '../theme/theme.dart';
 import '../widgets/widgets.dart';
 import '../layouts/main_layout.dart';
 import 'onboarding_screen.dart';
-
+import '../services/api_service.dart';
+import '../state/app_state_provider.dart';
 /// Giriş ekranı — tasarımda görülen modal kartı ve arka planı içerir.
 ///
 /// Yapı:
@@ -71,23 +72,55 @@ class _LoginScreenState extends State<LoginScreen>
   Future<void> _handleLogin() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     setState(() => _isLoading = true);
-    // TODO: Gerçek kimlik doğrulama entegre edilecek.
-    await Future.delayed(const Duration(milliseconds: 800));
-    if (!mounted) return;
-    setState(() => _isLoading = false);
-    debugPrint('Ana sayfaya geçilecek');
-    // Başarılı giriş → MainLayout'a yönlendir
-    Navigator.of(context).pushReplacement(
-      PageRouteBuilder(
-        pageBuilder: (ctx, anim, secAnim) => const MainLayout(),
-        transitionsBuilder: (ctx, animation, secAnim, child) => FadeTransition(
-          opacity:
-              CurvedAnimation(parent: animation, curve: Curves.easeOut),
-          child: child,
+    
+    try {
+      final user = await apiService.login(
+        _emailController.text.trim(),
+        _passwordController.text,
+      );
+
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+
+      if (user != null) {
+        // Set user in AppState
+        AppStateProvider.of(context).setUser(user);
+        
+        debugPrint('Giriş başarılı, ana sayfaya geçilecek');
+        Navigator.of(context).pushReplacement(
+          PageRouteBuilder(
+            pageBuilder: (ctx, anim, secAnim) => const MainLayout(),
+            transitionsBuilder: (ctx, animation, secAnim, child) => FadeTransition(
+              opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
+              child: child,
+            ),
+            transitionDuration: const Duration(milliseconds: 500),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: AppColors.error,
+            content: Text(
+              'Giriş başarısız. Lütfen bilgilerinizi kontrol edin.',
+              style: GoogleFonts.inter(color: Colors.white),
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.error,
+          content: Text(
+            'Bir hata oluştu: $e',
+            style: GoogleFonts.inter(color: Colors.white),
+          ),
         ),
-        transitionDuration: const Duration(milliseconds: 500),
-      ),
-    );
+      );
+    }
   }
 
   /// "Demo talep edin" linkine basıldığında açılan iletişim modalı.

@@ -7,6 +7,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import '../theme/theme.dart';
 import '../widgets/scale_tap.dart';
+import '../services/websocket_service.dart';
 import '../utils/localization.dart';
 import '../state/app_state_provider.dart';
 

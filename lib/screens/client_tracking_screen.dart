@@ -6,6 +6,7 @@ import 'dart:ui';
 import 'dart:math' as math;
 import '../theme/theme.dart';
 import '../widgets/scale_tap.dart';
+import '../services/websocket_service.dart';
 
 // ── Senaryo Veri Modeli ──
 class _MockRouteData {
@@ -123,6 +124,17 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> with Single
   void initState() {
     super.initState();
 
+    // Gerçek zamanlı WebSocket bağlantısı
+    wsService.connect(widget.trackingNumber); // Order ID or User ID
+    wsService.onMessageReceived = (data) {
+      if (data['type'] == 'location_update') {
+        // Gerçek koordinatlar geldiğinde UI güncellenecek
+        print("Real location received: ${data['lat']}, ${data['lon']}");
+        // TODO: _currentPos = LatLng(data['lat'], data['lon']);
+        // TODO: setState(() {});
+      }
+    };
+
     // Dinamik Senaryo Seçimi
     try {
       _currentScenario = _scenarios.firstWhere((s) => s.id == widget.trackingNumber);
@@ -176,7 +188,6 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> with Single
         setState(() {
           _showArrivalCard = true;
         });
-        
         // 5 saniye sonra bildirimi otomatik gizle
         Future.delayed(const Duration(seconds: 5), () {
           if (mounted) {
@@ -191,6 +202,7 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> with Single
 
   @override
   void dispose() {
+    wsService.disconnect();
     _vehicleCtrl.dispose();
     _mapController.dispose();
     _sheetCtrl.dispose();
