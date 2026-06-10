@@ -4,7 +4,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:geolocator/geolocator.dart';
 
 class WebSocketService {
-  static const String wsUrl = 'ws://10.0.2.2:8000/api/tracking/ws';
+  static const String wsUrl = 'ws://10.0.2.2:8000/ws';
   WebSocketChannel? _channel;
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
   

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/theme.dart';
+import '../models/order_model.dart';
+import '../services/order_service.dart';
 
 /// Siparişler sekmesi — filtreli sipariş listesi.
 class OrdersScreen extends StatefulWidget {
@@ -16,51 +18,23 @@ class _OrdersScreenState extends State<OrdersScreen>
 
   static const _tabs = ['Aktif', 'Beklemede', 'Tamamlanan'];
 
-  static const _activeOrders = [
-    _Order(id: '#ORD-1842', customer: 'Zeynep Aydın',
-        address: 'Bağcılar, Meydan Sk. 14', status: 'Yolda',
-        courier: 'Ahmet K.', time: '14:32', items: 3,
-        amount: '₺148,00', statusColor: Color(0xFF4DBFB0)),
-    _Order(id: '#ORD-1841', customer: 'Kemal Şahin',
-        address: 'Güngören, Atatürk Cd. 88', status: 'Teslimatta',
-        courier: 'Mehmet S.', time: '14:18', items: 1,
-        amount: '₺67,50', statusColor: Color(0xFFFFAA00)),
-    _Order(id: '#ORD-1839', customer: 'Selin Çelik',
-        address: 'Esenler, Barbaros Bl. 7', status: 'Yolda',
-        courier: 'Fatma N.', time: '13:55', items: 2,
-        amount: '₺210,00', statusColor: Color(0xFF4DBFB0)),
-  ];
-
-  static const _pendingOrders = [
-    _Order(id: '#ORD-1845', customer: 'Murat Kaya',
-        address: 'Şişli, Cumhuriyet Cd. 40', status: 'Beklemede',
-        courier: '—', time: '15:01', items: 4,
-        amount: '₺320,00', statusColor: Color(0xFF9B7FFF)),
-    _Order(id: '#ORD-1844', customer: 'Hatice Yıldız',
-        address: 'Beşiktaş, Ihlamur Sk. 22', status: 'Beklemede',
-        courier: '—', time: '14:58', items: 1,
-        amount: '₺85,00', statusColor: Color(0xFF9B7FFF)),
-  ];
-
-  static const _completedOrders = [
-    _Order(id: '#ORD-1838', customer: 'Ömer Demir',
-        address: 'Kadıköy, Moda Cd. 5', status: 'Teslim Edildi',
-        courier: 'Ali R.', time: '13:40', items: 2,
-        amount: '₺175,00', statusColor: Color(0xFF4DBFB0)),
-    _Order(id: '#ORD-1836', customer: 'Ayşe Korkmaz',
-        address: 'Üsküdar, Bağlarbaşı Sk. 9', status: 'Teslim Edildi',
-        courier: 'Ahmet K.', time: '13:12', items: 3,
-        amount: '₺230,00', statusColor: Color(0xFF4DBFB0)),
-    _Order(id: '#ORD-1834', customer: 'İbrahim Arslan',
-        address: 'Maltepe, Bağdat Cd. 118', status: 'Teslim Edildi',
-        courier: 'Fatma N.', time: '12:50', items: 1,
-        amount: '₺92,00', statusColor: Color(0xFF4DBFB0)),
-  ];
+  List<OrderModel> _myOrders = [];
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
     _tabCtrl = TabController(length: 3, vsync: this);
+    _fetchOrders();
+  }
+
+  Future<void> _fetchOrders() async {
+    setState(() => _isLoading = true);
+    final orders = await orderService.getMyOrders();
+    setState(() {
+      _myOrders = orders;
+      _isLoading = false;
+    });
   }
 
   @override
@@ -69,11 +43,14 @@ class _OrdersScreenState extends State<OrdersScreen>
     super.dispose();
   }
 
-  List<_Order> get _currentOrders {
+  List<OrderModel> get _currentOrders {
     switch (_tabCtrl.index) {
-      case 0: return _activeOrders;
-      case 1: return _pendingOrders;
-      default: return _completedOrders;
+      case 0:
+        return _myOrders.where((o) => ['picked_up', 'in_transit'].contains(o.status)).toList();
+      case 1:
+        return _myOrders.where((o) => ['assigned'].contains(o.status)).toList();
+      default:
+        return _myOrders.where((o) => ['delivered', 'cancelled'].contains(o.status)).toList();
     }
   }
 
@@ -166,18 +143,29 @@ class _OrdersScreenState extends State<OrdersScreen>
 
             // ── Sipariş listesi ──────────────────────────────────────────────
             Expanded(
-              child: AnimatedBuilder(
-                animation: _tabCtrl,
-                builder: (context, child) {
-                  return ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-                    itemCount: _currentOrders.length,
-                    separatorBuilder: (context, idx) => const SizedBox(height: 10),
-                    itemBuilder: (_, i) =>
-                        _OrderCard(order: _currentOrders[i]),
-                  );
-                },
-              ),
+              child: _isLoading 
+                ? const Center(child: CircularProgressIndicator())
+                : AnimatedBuilder(
+                    animation: _tabCtrl,
+                    builder: (context, child) {
+                      final currentList = _currentOrders;
+                      if (currentList.isEmpty) {
+                        return Center(
+                          child: Text("Bu kategoride sipariş bulunamadı.", 
+                            style: GoogleFonts.inter(color: cs.onSurface.withAlpha(150)))
+                        );
+                      }
+                      return RefreshIndicator(
+                        onRefresh: _fetchOrders,
+                        child: ListView.separated(
+                          padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                          itemCount: currentList.length,
+                          separatorBuilder: (context, idx) => const SizedBox(height: 10),
+                          itemBuilder: (_, i) => _OrderCard(order: currentList[i]),
+                        ),
+                      );
+                    },
+                  ),
             ),
           ],
         ),
@@ -304,12 +292,39 @@ class _MetricBox extends StatelessWidget {
 
 class _OrderCard extends StatelessWidget {
   const _OrderCard({required this.order});
-  final _Order order;
+  final OrderModel order;
+
+  Color _getStatusColor() {
+    switch (order.status) {
+      case 'assigned':
+        return const Color(0xFF9B7FFF);
+      case 'picked_up':
+      case 'in_transit':
+        return const Color(0xFFFFAA00);
+      case 'delivered':
+        return const Color(0xFF4DBFB0);
+      default:
+        return Colors.grey;
+    }
+  }
+
+  String _getStatusText() {
+    switch (order.status) {
+      case 'assigned': return 'Beklemede';
+      case 'picked_up': return 'Teslim Alındı';
+      case 'in_transit': return 'Yolda';
+      case 'delivered': return 'Teslim Edildi';
+      case 'cancelled': return 'İptal Edildi';
+      default: return order.status;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final cs  = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final statusColor = _getStatusColor();
+    
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -333,24 +348,24 @@ class _OrderCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: order.statusColor.withAlpha(18),
+                  color: statusColor.withAlpha(18),
                   borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: order.statusColor.withAlpha(60), width: 1),
+                  border: Border.all(color: statusColor.withAlpha(60), width: 1),
                 ),
-                child: Text(order.id,
+                child: Text(_getStatusText(),
                     style: GoogleFonts.inter(
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
-                        color: order.statusColor)),
+                        color: statusColor)),
               ),
               const Spacer(),
-              Text(order.time,
+              Text('ID: ${order.id}',
                   style: GoogleFonts.inter(
                       fontSize: 11, color: cs.onSurface.withAlpha(120))),
             ],
           ),
           const SizedBox(height: 10),
-          Text(order.customer,
+          Text(order.customerName ?? 'İsimsiz Müşteri',
               style: GoogleFonts.inter(
                   fontSize: 15,
                   fontWeight: FontWeight.w700,
@@ -362,7 +377,7 @@ class _OrderCard extends StatelessWidget {
                   size: 12, color: cs.onSurface.withAlpha(100)),
               const SizedBox(width: 4),
               Expanded(
-                child: Text(order.address,
+                child: Text(order.deliveryAddress ?? 'Adres belirtilmemiş',
                     overflow: TextOverflow.ellipsis,
                     style: GoogleFonts.inter(
                         fontSize: 12, color: cs.onSurface.withAlpha(150))),
@@ -372,25 +387,18 @@ class _OrderCard extends StatelessWidget {
           const SizedBox(height: 10),
           Row(
             children: [
-              Icon(Icons.directions_bike_rounded,
+              Icon(Icons.phone,
                   size: 12, color: cs.onSurface.withAlpha(100)),
               const SizedBox(width: 4),
-              Text(order.courier,
-                  style: GoogleFonts.inter(
-                      fontSize: 12, color: cs.onSurface.withAlpha(150))),
-              const SizedBox(width: 8),
-              Icon(Icons.shopping_bag_outlined,
-                  size: 12, color: cs.onSurface.withAlpha(100)),
-              const SizedBox(width: 4),
-              Text('${order.items} ürün',
+              Text(order.customerPhone ?? '-',
                   style: GoogleFonts.inter(
                       fontSize: 12, color: cs.onSurface.withAlpha(150))),
               const Spacer(),
-              Text(order.amount,
+              Text(order.totalAmount != null ? '₺${order.totalAmount!.toStringAsFixed(2)}' : '-',
                   style: GoogleFonts.inter(
                       fontSize: 16,
                       fontWeight: FontWeight.w800,
-                      color: order.statusColor)),
+                      color: statusColor)),
             ],
           ),
         ],
@@ -399,29 +407,3 @@ class _OrderCard extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Sipariş modeli
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _Order {
-  const _Order({
-    required this.id,
-    required this.customer,
-    required this.address,
-    required this.status,
-    required this.courier,
-    required this.time,
-    required this.items,
-    required this.amount,
-    required this.statusColor,
-  });
-  final String id;
-  final String customer;
-  final String address;
-  final String status;
-  final String courier;
-  final String time;
-  final int items;
-  final String amount;
-  final Color statusColor;
-}

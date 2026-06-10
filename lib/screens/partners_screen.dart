@@ -33,76 +33,7 @@ class _PartnerData {
 // Partner Verileri
 // ─────────────────────────────────────────────────────────────────────────────
 
-const List<_PartnerData> _kPartners = [
-  _PartnerData(
-    name: 'Global Freight Express',
-    subtitle: 'ULUSLARARASI KARGO & LOJİSTİK',
-    desc: 'Avrupa ve Asya koridorlarında kapsamlı uluslararası kargo hizmetleri. '
-        'Gümrük danışmanlığı, multimodal taşıma ve anlık gönderi takibi tek platformda.',
-    badge: 'REST API',
-    tags: ['Uluslararası Taşıma', 'Gümrük Danışmanlığı', 'Multimodal'],
-    headerColor: Color(0xFF1B3828),
-    accentColor: Color(0xFF2D5A3D),
-    icon: Icons.flight_rounded,
-  ),
-  _PartnerData(
-    name: 'CityLine Last-Mile',
-    subtitle: 'ŞEHİR İÇİ ANLIK TESLİMAT',
-    desc: 'İstanbul, Ankara ve İzmir başta olmak üzere 12 büyükşehirde aynı gün '
-        'teslimat hizmeti. Bisiklet kuryeleri, elektrikli araçlar ve drone teslimatı '
-        'seçenekleriyle karbon-nötr lojistik.',
-    badge: 'WEBHOOK + REST',
-    tags: ['Same-Day Delivery', 'Micro-Fulfillment', 'Drone Pilot'],
-    headerColor: Color(0xFF2A5438),
-    accentColor: Color(0xFF3D7A52),
-    icon: Icons.pedal_bike_rounded,
-  ),
-  _PartnerData(
-    name: 'ColdChain Logistics',
-    subtitle: 'SOĞUK ZİNCİR & KONTROLLÜ DEPO',
-    desc: 'Farmasötik, gıda ve biyomedikal ürünler için −25°C ile +25°C arasında '
-        'kesintisiz sıcaklık kontrollü depolama, taşıma ve dağıtım hizmeti. '
-        'FDA & ISO 9001 sertifikalı.',
-    badge: 'SOAP + REST',
-    tags: ['Pharma Cold Chain', 'ISO 9001', 'Reefer Truck'],
-    headerColor: Color(0xFF1A3845),
-    accentColor: Color(0xFF2A5568),
-    icon: Icons.ac_unit_rounded,
-  ),
-  _PartnerData(
-    name: 'AeroGlobal Cargo',
-    subtitle: 'HAVA KARGO & EKSPRES UÇUŞ',
-    desc: 'Türkiye\'nin tüm havalimanlarına ve 60+ ülkeye günlük charter ve hat uçuşları. '
-        'Kıymetli yük, e-ticaret paketleri ve acil gönderi için kapıdan kapıya hava kargo çözümleri.',
-    badge: 'OAUTH 2.0 + REST',
-    tags: ['Air Freight', 'Charter Uçuşu', 'Değerli Yük'],
-    headerColor: Color(0xFF3A3218),
-    accentColor: Color(0xFF5A4E28),
-    icon: Icons.rocket_launch_rounded,
-  ),
-  _PartnerData(
-    name: 'SwiftPort Maritime',
-    subtitle: 'DENİZ YOLU KONTEYNER TAŞIMACILIĞI',
-    desc: 'İzmir Aliağa, Mersin ve İstanbul limanlarından Akdeniz, Karadeniz ve '
-        'Körfez hatlarına FCL/LCL konteyner çözümleri. Gerçek zamanlı gemi takip entegrasyonu.',
-    badge: 'GRAPHQL + REST',
-    tags: ['FCL / LCL', 'Port Agency', 'AIS Takip'],
-    headerColor: Color(0xFF4A2D1A),
-    accentColor: Color(0xFF6B4526),
-    icon: Icons.directions_boat_rounded,
-  ),
-  _PartnerData(
-    name: 'TerraFleet Road Freight',
-    subtitle: 'KARAYOLU PARSİYEL & KOMPLE YÜK',
-    desc: 'TIR, frigorifik araç ve lowbed çekicilerden oluşan 2.000+ araçlık filo ile '
-        'Türkiye\'nin tüm illerine ve TIR güzergahında 40+ ülkeye parsiyel ve komple yük hizmeti.',
-    badge: 'REST API + EDI',
-    tags: ['FTL / LTL', 'TIR Güzergahı', 'ADR Tehlikeli Madde'],
-    headerColor: Color(0xFF3D2012),
-    accentColor: Color(0xFF5C3520),
-    icon: Icons.local_shipping_rounded,
-  ),
-];
+const List<_PartnerData> _kPartners = [];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Ana Ekran
@@ -175,44 +106,66 @@ class PartnersScreen extends StatelessWidget {
             SliverToBoxAdapter(child: _HeroSection(isDark: isDark)),
 
             // ── Partner kartları ──────────────────────────────────────────────
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-              sliver: SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (ctx, i) {
-                    final p = _kPartners[i];
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: _PartnerCard(
-                        data: p,
-                        isDark: isDark,
-                        onTeklifAl: () =>
-                            _showToast(ctx, '${p.name} ile görüşme talebiniz iletildi!'),
-                        onIletisim: () => _showContactSheet(ctx, p),
-                        onApiBadge: () => Navigator.push(
-                          ctx,
-                          PageRouteBuilder(
-                            pageBuilder: (ctx2, anim1, sec) =>
-                                const ApiDetailsPlaceholder(),
-                            transitionsBuilder: (ctx2, anim, sec, child) =>
-                                SlideTransition(
-                              position: Tween<Offset>(
-                                begin: const Offset(1, 0),
-                                end: Offset.zero,
-                              ).animate(CurvedAnimation(
-                                  parent: anim, curve: Curves.easeInOut)),
-                              child: child,
+            if (_kPartners.isEmpty)
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.handshake_rounded, size: 64, color: isDark ? Colors.white38 : Colors.black38),
+                      const SizedBox(height: 16),
+                      Text('Ortaklarımız Çok Yakında Burada!', 
+                        style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w700, color: isDark ? Colors.white70 : Colors.black87)
+                      ),
+                      const SizedBox(height: 8),
+                      Text('Sisteme entegre edilecek iş ortaklarımızı listelemeye hazırlanıyoruz.',
+                        style: GoogleFonts.inter(fontSize: 14, color: isDark ? Colors.white54 : Colors.black54),
+                        textAlign: TextAlign.center,
+                      )
+                    ],
+                  ),
+                ),
+              )
+            else
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (ctx, i) {
+                      final p = _kPartners[i];
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: _PartnerCard(
+                          data: p,
+                          isDark: isDark,
+                          onTeklifAl: () =>
+                              _showToast(ctx, '${p.name} ile görüşme talebiniz iletildi!'),
+                          onIletisim: () => _showContactSheet(ctx, p),
+                          onApiBadge: () => Navigator.push(
+                            ctx,
+                            PageRouteBuilder(
+                              pageBuilder: (ctx2, anim1, sec) =>
+                                  const ApiDetailsPlaceholder(),
+                              transitionsBuilder: (ctx2, anim, sec, child) =>
+                                  SlideTransition(
+                                position: Tween<Offset>(
+                                  begin: const Offset(1, 0),
+                                  end: Offset.zero,
+                                ).animate(CurvedAnimation(
+                                    parent: anim, curve: Curves.easeInOut)),
+                                child: child,
+                              ),
+                              transitionDuration: const Duration(milliseconds: 300),
                             ),
-                            transitionDuration: const Duration(milliseconds: 300),
                           ),
                         ),
-                      ),
-                    );
-                  },
-                  childCount: _kPartners.length,
+                      );
+                    },
+                    childCount: _kPartners.length,
+                  ),
                 ),
               ),
-            ),
 
             // ── Alt banner ────────────────────────────────────────────────────
             SliverToBoxAdapter(

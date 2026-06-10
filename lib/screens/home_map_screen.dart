@@ -8,6 +8,9 @@ import 'dart:math' as math;
 import '../theme/theme.dart';
 import '../widgets/scale_tap.dart';
 import '../services/websocket_service.dart';
+import '../services/maps_service.dart'; // Added
+import '../services/tracking_service.dart'; // Added
+import '../models/tracking_model.dart'; // Added
 import '../utils/localization.dart';
 import '../state/app_state_provider.dart';
 
@@ -25,9 +28,13 @@ class _HomeMapScreenState extends State<HomeMapScreen>
   late Animation<double> _pulse;
   final DraggableScrollableController _sheetController = DraggableScrollableController();
 
-  _OrderData? _selectedOrder;
+  ActiveOrderModel? _selectedOrder;
   bool _isAIOptimized = false;
   bool _isRadarScanActive = false;
+
+  List<ActiveCourierModel> _couriers = [];
+  List<ActiveOrderModel> _activeOrders = [];
+  Timer? _refreshTimer;
 
   void _onOptimizeRoutes() {
     setState(() => _isAIOptimized = true);
@@ -40,57 +47,25 @@ class _HomeMapScreenState extends State<HomeMapScreen>
     });
   }
 
-  // ── Global Hub (Türkiye Merkezli) Kurye Verileri ──────────────────────────
-  static final _couriers = [
-    // Türkiye İçi
-    _CourierData(name: 'Ahmet Y.', status: 'Yolda', orders: 3, position: const LatLng(41.0082, 28.9784), color: const Color(0xFF4DBFB0)), // İstanbul
-    _CourierData(name: 'Caner K.', status: 'Yolda', orders: 2, position: const LatLng(39.9334, 32.8597), color: const Color(0xFF00FFCC)), // Ankara
-    _CourierData(name: 'Mehmet S.', status: 'Teslimatta', orders: 1, position: const LatLng(38.4237, 27.1428), color: const Color(0xFFFFAA00)), // İzmir
-    _CourierData(name: 'Ali V.', status: 'Boşta', orders: 0, position: const LatLng(37.0662, 37.3833), color: const Color(0xFF9B7FFF)), // Gaziantep
-    _CourierData(name: 'Serkan D.', status: 'Yolda', orders: 4, position: const LatLng(41.0053, 29.0122), color: const Color(0xFFFF0055)), // İstanbul (Anadolu)
-
-    // Avrupa Hattı
-    _CourierData(name: 'Oliver S.', status: 'Yolda', orders: 5, position: const LatLng(51.5074, -0.1278), color: const Color(0xFF00C3FF)), // London
-    _CourierData(name: 'Hans B.', status: 'Yolda', orders: 2, position: const LatLng(52.5200, 13.4050), color: const Color(0xFF00FFCC)), // Berlin
-    _CourierData(name: 'Pierre M.', status: 'Teslimatta', orders: 1, position: const LatLng(48.8566, 2.3522), color: const Color(0xFFFFAA00)), // Paris
-    _CourierData(name: 'Luca R.', status: 'Yolda', orders: 3, position: const LatLng(41.9028, 12.4964), color: const Color(0xFF00C3FF)), // Rome
-    _CourierData(name: 'Mateo C.', status: 'Yolda', orders: 4, position: const LatLng(40.4168, -3.7038), color: const Color(0xFF00C3FF)), // Madrid
-
-    // Ortadoğu ve Asya Hattı
-    _CourierData(name: 'Amir H.', status: 'Yolda', orders: 3, position: const LatLng(25.2048, 55.2708), color: const Color(0xFF00FFCC)), // Dubai
-    _CourierData(name: 'Tariq A.', status: 'Teslimatta', orders: 1, position: const LatLng(24.7136, 46.6753), color: const Color(0xFFFFAA00)), // Riyadh
-    _CourierData(name: 'Kenji T.', status: 'Yolda', orders: 2, position: const LatLng(35.6895, 139.6917), color: const Color(0xFF00C3FF)), // Tokyo
-    _CourierData(name: 'Chen W.', status: 'Yolda', orders: 6, position: const LatLng(31.2304, 121.4737), color: const Color(0xFFFF0055)), // Shanghai
-    _CourierData(name: 'Raj P.', status: 'Yolda', orders: 4, position: const LatLng(19.0760, 72.8777), color: const Color(0xFF00C3FF)), // Mumbai
-  ];
-
-  static final _activeOrders = [
-    // --- AI Rotaları (Neon Mavi) ---
-    _OrderData(id: 'LOOP-EU-101', customer: 'LogisTech GmbH', address: 'Berlin, Almanya', status: 'Yolda', courier: 'Hans B.', eta: '2s 15dk', statusColor: const Color(0xFF4DBFB0), routeType: 'ai', startPos: const LatLng(41.0082, 28.9784), endPos: const LatLng(52.5200, 13.4050)),
-    _OrderData(id: 'LOOP-UK-205', customer: 'Global Trade Ltd', address: 'London, UK', status: 'Yolda', courier: 'Oliver S.', eta: '4s 30dk', statusColor: const Color(0xFF4DBFB0), routeType: 'ai', startPos: const LatLng(41.0082, 28.9784), endPos: const LatLng(51.5074, -0.1278)),
-    _OrderData(id: 'LOOP-IT-309', customer: 'Roma Imports', address: 'Rome, Italy', status: 'Yolda', courier: 'Luca R.', eta: '1s 45dk', statusColor: const Color(0xFF4DBFB0), routeType: 'ai', startPos: const LatLng(38.4237, 27.1428), endPos: const LatLng(41.9028, 12.4964)),
-    _OrderData(id: 'LOOP-JP-842', customer: 'Tokyo Electronics', address: 'Shibuya, Tokyo', status: 'Yolda', courier: 'Kenji T.', eta: '11s 20dk', statusColor: const Color(0xFF4DBFB0), routeType: 'ai', startPos: const LatLng(41.0082, 28.9784), endPos: const LatLng(35.6895, 139.6917)),
-    _OrderData(id: 'LOOP-IN-404', customer: 'Mumbai Textiles', address: 'Mumbai, India', status: 'Yolda', courier: 'Raj P.', eta: '6s 10dk', statusColor: const Color(0xFF4DBFB0), routeType: 'ai', startPos: const LatLng(39.9334, 32.8597), endPos: const LatLng(19.0760, 72.8777)),
-    _OrderData(id: 'LOOP-ES-502', customer: 'Madrid Supply', address: 'Madrid, Spain', status: 'Yolda', courier: 'Mateo C.', eta: '3s 50dk', statusColor: const Color(0xFF4DBFB0), routeType: 'ai', startPos: const LatLng(38.4237, 27.1428), endPos: const LatLng(40.4168, -3.7038)),
-
-    // --- Anomali / Gecikme Rotaları (Neon Kırmızı) ---
-    _OrderData(id: 'LOOP-CN-999', customer: 'Shanghai Auto', address: 'Shanghai, China', status: 'Gecikme', courier: 'Chen W.', eta: 'Gecikmeli', statusColor: const Color(0xFFFF0055), routeType: 'anomaly', startPos: const LatLng(41.0082, 28.9784), endPos: const LatLng(31.2304, 121.4737)),
-    _OrderData(id: 'LOOP-TR-001', customer: 'Bosphorus AS', address: 'Kadikoy, Istanbul', status: 'Trafik', courier: 'Serkan D.', eta: '45 dk', statusColor: const Color(0xFFFF0055), routeType: 'anomaly', startPos: const LatLng(41.0053, 29.0122), endPos: const LatLng(40.9903, 29.0203)),
-    
-    // --- Teslimatta (Sarı) ---
-    _OrderData(id: 'LOOP-FR-707', customer: 'Paris Fashion', address: 'Paris, France', status: 'Teslimatta', courier: 'Pierre M.', eta: '5 dk', statusColor: const Color(0xFFFFAA00), routeType: 'normal', startPos: const LatLng(41.0082, 28.9784), endPos: const LatLng(48.8566, 2.3522)),
-    _OrderData(id: 'LOOP-SA-808', customer: 'Riyadh Holdings', address: 'Riyadh, KSA', status: 'Teslimatta', courier: 'Tariq A.', eta: '12 dk', statusColor: const Color(0xFFFFAA00), routeType: 'normal', startPos: const LatLng(37.0662, 37.3833), endPos: const LatLng(24.7136, 46.6753)),
-    _OrderData(id: 'LOOP-TR-303', customer: 'Ege Tarım', address: 'Bornova, Izmir', status: 'Teslimatta', courier: 'Mehmet S.', eta: '8 dk', statusColor: const Color(0xFFFFAA00), routeType: 'normal', startPos: const LatLng(38.4237, 27.1428), endPos: const LatLng(38.4622, 27.2166)),
-
-    // --- Normal Rotalar (Gri) ---
-    _OrderData(id: 'LOOP-UAE-415', customer: 'Dubai Motors', address: 'Downtown, Dubai', status: 'Yolda', courier: 'Amir H.', eta: '3s 40dk', statusColor: const Color(0xFF4DBFB0), routeType: 'normal', startPos: const LatLng(37.0662, 37.3833), endPos: const LatLng(25.2048, 55.2708)),
-    _OrderData(id: 'LOOP-TR-102', customer: 'Ankara Savunma', address: 'Cankaya, Ankara', status: 'Yolda', courier: 'Caner K.', eta: '25 dk', statusColor: const Color(0xFF4DBFB0), routeType: 'normal', startPos: const LatLng(39.9334, 32.8597), endPos: const LatLng(39.8906, 32.8569)),
-    _OrderData(id: 'LOOP-TR-055', customer: 'Istanbul Tech', address: 'Levent, Istanbul', status: 'Yolda', courier: 'Ahmet Y.', eta: '18 dk', statusColor: const Color(0xFF4DBFB0), routeType: 'normal', startPos: const LatLng(41.0082, 28.9784), endPos: const LatLng(41.0825, 29.0118)),
-  ];
+  Future<void> _fetchData() async {
+    final couriers = await trackingService.getActiveCouriers();
+    if (mounted) {
+      setState(() {
+        _couriers = couriers;
+        _activeOrders = [];
+        for (var c in couriers) {
+          _activeOrders.addAll(c.activeOrders);
+        }
+      });
+    }
+  }
 
   @override
   void initState() {
     super.initState();
+    _fetchData();
+    _refreshTimer = Timer.periodic(const Duration(seconds: 10), (_) => _fetchData());
+
     _pulseCtrl = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 1800))
       ..repeat(reverse: true);
@@ -100,6 +75,7 @@ class _HomeMapScreenState extends State<HomeMapScreen>
 
   @override
   void dispose() {
+    _refreshTimer?.cancel();
     _pulseCtrl.dispose();
     _sheetController.dispose();
     super.dispose();
@@ -431,11 +407,11 @@ class _MapCanvas extends StatefulWidget {
     required this.onOptimizeRoutes,
     required this.onTrafficAnalysis,
   });
-  final List<_CourierData> couriers;
-  final List<_OrderData> activeOrders;
+  final List<ActiveCourierModel> couriers;
+  final List<ActiveOrderModel> activeOrders;
   final Animation<double> pulseAnim;
-  final _OrderData? selectedOrder;
-  final Function(_OrderData) onOrderSelect;
+  final ActiveOrderModel? selectedOrder;
+  final Function(ActiveOrderModel) onOrderSelect;
   final bool isAIOptimized;
   final bool isRadarScanActive;
   final VoidCallback onOptimizeRoutes;
@@ -450,6 +426,9 @@ class _MapCanvasState extends State<_MapCanvas> with SingleTickerProviderStateMi
   final LatLng _center = const LatLng(39.0, 35.0); // Türkiye Hub Center
   late AnimationController _vehicleAnimCtrl;
   bool _isHeatmapActive = false;
+  
+  List<LatLng> _currentRoute = [];
+  bool _isLoadingRoute = false;
 
   @override
   void initState() {
@@ -466,11 +445,29 @@ class _MapCanvasState extends State<_MapCanvas> with SingleTickerProviderStateMi
     super.dispose();
   }
 
+  Future<void> _fetchRoute(LatLng start, LatLng end) async {
+    setState(() => _isLoadingRoute = true);
+    final points = await mapsService.getRoutePoints(start, end);
+    if (mounted) {
+      setState(() {
+        if (points.isNotEmpty) {
+          _currentRoute = points;
+        } else {
+          _currentRoute = [start, end];
+        }
+        _isLoadingRoute = false;
+      });
+    }
+  }
+
   @override
   void didUpdateWidget(_MapCanvas oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.selectedOrder != null && oldWidget.selectedOrder != widget.selectedOrder) {
-      _mapController.move(widget.selectedOrder!.endPos, 5.0); // Uzun mesafeler için zoom'u azalttık
+      _mapController.move(widget.selectedOrder!.deliveryPosition, 10.0);
+      _fetchRoute(widget.selectedOrder!.pickupPosition, widget.selectedOrder!.deliveryPosition);
+    } else if (widget.selectedOrder == null && oldWidget.selectedOrder != null) {
+       _currentRoute = [];
     }
   }
 
@@ -498,7 +495,7 @@ class _MapCanvasState extends State<_MapCanvas> with SingleTickerProviderStateMi
                 circles: [
                   ...widget.activeOrders.map((order) {
                     return CircleMarker(
-                      point: order.startPos,
+                      point: order.pickupPosition,
                       color: Colors.red.withAlpha(100),
                       borderStrokeWidth: 0,
                       useRadiusInMeter: true,
@@ -539,39 +536,26 @@ class _MapCanvasState extends State<_MapCanvas> with SingleTickerProviderStateMi
                   PolylineLayer(
                     polylines: <Polyline<Object>>[
                       Polyline(
-                        points: [
-                          widget.selectedOrder!.startPos,
-                          widget.selectedOrder!.endPos,
-                        ],
-                        color: (widget.isAIOptimized && widget.selectedOrder!.routeType == 'anomaly')
-                            ? AppColors.neonTeal
-                            : widget.selectedOrder!.routeType == 'ai' 
-                                ? AppColors.neonBlue 
-                                : widget.selectedOrder!.routeType == 'anomaly' 
-                                    ? AppColors.neonRed 
-                                    : Colors.grey.withAlpha(120),
-                        strokeWidth: widget.selectedOrder!.routeType == 'normal' ? 2.5 : 3.5,
-                        gradientColors: (widget.isAIOptimized && widget.selectedOrder!.routeType == 'anomaly')
-                            ? [AppColors.neonTeal.withAlpha(150), const Color(0xFF00FFCC).withAlpha(150)]
-                            : widget.selectedOrder!.routeType == 'ai' 
-                                ? [AppColors.neonTeal.withAlpha(150), AppColors.neonBlue.withAlpha(150)]
-                                : widget.selectedOrder!.routeType == 'anomaly'
-                                    ? [const Color(0xFFFF5500).withAlpha(150), AppColors.neonRed.withAlpha(150)]
-                                    : null,
+                        points: _currentRoute.isNotEmpty 
+                            ? _currentRoute 
+                            : [widget.selectedOrder!.pickupPosition, widget.selectedOrder!.deliveryPosition],
+                        color: AppColors.neonBlue,
+                        strokeWidth: 3.5,
+                        gradientColors: [AppColors.neonTeal.withAlpha(150), AppColors.neonBlue.withAlpha(150)],
                       ),
                     ],
                   ),
             if (!_isHeatmapActive)
                 MarkerLayer(
                   markers: widget.couriers.map((courier) {
-                    final isSelected = widget.selectedOrder?.courier == courier.name;
+                    final isSelected = widget.selectedOrder != null;
                     return Marker(
                       point: courier.position,
                       width: 44,
                       height: 44,
                       child: _CorporateMarker(
-                        color: courier.color,
-                        status: courier.status,
+                        color: courier.isOnline ? AppColors.neonTeal : Colors.grey,
+                        status: courier.isOnline ? 'Aktif' : 'Pasif',
                         isSelected: isSelected,
                       ),
                     );
@@ -585,14 +569,14 @@ class _MapCanvasState extends State<_MapCanvas> with SingleTickerProviderStateMi
                     return MarkerLayer(
                       markers: widget.activeOrders.expand((order) {
                         final p = _vehicleAnimCtrl.value;
-                        final lat = order.startPos.latitude + (order.endPos.latitude - order.startPos.latitude) * p;
-                        final lng = order.startPos.longitude + (order.endPos.longitude - order.startPos.longitude) * p;
+                        final lat = order.pickupPosition.latitude + (order.deliveryPosition.latitude - order.pickupPosition.latitude) * p;
+                        final lng = order.pickupPosition.longitude + (order.deliveryPosition.longitude - order.pickupPosition.longitude) * p;
                         final currentPos = LatLng(lat, lng);
                         
                         // Digital Twin (10s ahead)
                         final twinP = (p + 0.05).clamp(0.0, 1.0);
-                        final tLat = order.startPos.latitude + (order.endPos.latitude - order.startPos.latitude) * twinP;
-                        final tLng = order.startPos.longitude + (order.endPos.longitude - order.startPos.longitude) * twinP;
+                        final tLat = order.pickupPosition.latitude + (order.deliveryPosition.latitude - order.pickupPosition.latitude) * twinP;
+                        final tLng = order.pickupPosition.longitude + (order.deliveryPosition.longitude - order.pickupPosition.longitude) * twinP;
                         final twinPos = LatLng(tLat, tLng);
                         
                         return [
@@ -616,9 +600,9 @@ class _MapCanvasState extends State<_MapCanvas> with SingleTickerProviderStateMi
                             child: GestureDetector(
                               onTap: () => widget.onOrderSelect(order),
                               child: _CorporateMarker(
-                                color: (widget.isAIOptimized && order.routeType == 'anomaly') ? AppColors.neonTeal : order.statusColor,
-                                status: (widget.isAIOptimized && order.routeType == 'anomaly') ? 'Optimize Edildi' : order.status,
-                                isSelected: widget.selectedOrder?.id == order.id,
+                                color: AppColors.neonBlue,
+                                status: order.status,
+                                isSelected: widget.selectedOrder?.orderId == order.orderId,
                               ),
                             ),
                           ),
@@ -627,18 +611,17 @@ class _MapCanvasState extends State<_MapCanvas> with SingleTickerProviderStateMi
                     );
                   },
                 ),
-                // Eğer seçili sipariş varsa başlangıç ve bitiş noktalarına da marker ekleyelim
             if (!_isHeatmapActive && widget.selectedOrder != null)
                   MarkerLayer(
                     markers: [
                       Marker(
-                        point: widget.selectedOrder!.startPos,
+                        point: widget.selectedOrder!.pickupPosition,
                         width: 30,
                         height: 30,
                         child: const Icon(Icons.storefront_rounded, color: Colors.white, size: 24),
                       ),
                       Marker(
-                        point: widget.selectedOrder!.endPos,
+                        point: widget.selectedOrder!.deliveryPosition,
                         width: 30,
                         height: 30,
                         child: const Icon(Icons.location_on_rounded, color: AppColors.textAccent, size: 30),
@@ -734,9 +717,9 @@ class _ActiveOrdersList extends StatelessWidget {
     this.scrollController,
     this.onHandleTap,
   });
-  final List<_OrderData> orders;
-  final _OrderData? selectedOrder;
-  final Function(_OrderData) onOrderSelect;
+  final List<ActiveOrderModel> orders;
+  final ActiveOrderModel? selectedOrder;
+  final Function(ActiveOrderModel) onOrderSelect;
   final ScrollController? scrollController;
   final VoidCallback? onHandleTap;
 
@@ -797,10 +780,88 @@ class _ActiveOrdersList extends StatelessWidget {
                               separatorBuilder: (context, index) => const SizedBox(height: 10),
                               itemBuilder: (context, index) {
                                 final order = orders[index];
-                                final isSelected = selectedOrder?.id == order.id;
-                                return ScaleTap(
+                                final isSelected = selectedOrder?.orderId == order.orderId;
+                                
+                                return GestureDetector(
                                   onTap: () => onOrderSelect(order),
-                                  child: _OrderCard(order: order, isSelected: isSelected),
+                                  child: AnimatedContainer(
+                                    duration: const Duration(milliseconds: 300),
+                                    padding: const EdgeInsets.all(14),
+                                    decoration: BoxDecoration(
+                                      color: isSelected 
+                                          ? AppColors.neonTeal.withAlpha(20) 
+                                          : (isDark ? Colors.white.withAlpha(5) : Colors.black.withAlpha(5)),
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: Border.all(
+                                        color: isSelected ? AppColors.neonTeal.withAlpha(150) : Colors.transparent,
+                                        width: 1,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        // Status Icon / Ring
+                                        Container(
+                                          width: 40, height: 40,
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            border: Border.all(
+                                              color: AppColors.neonBlue.withAlpha(150),
+                                              width: 2,
+                                            ),
+                                          ),
+                                          child: Center(
+                                            child: Icon(Icons.local_shipping_rounded, 
+                                                color: AppColors.neonBlue, size: 20),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 14),
+                                        
+                                        // Order Info
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Row(
+                                                children: [
+                                                  Text('Sipariş #${order.orderId}', 
+                                                    style: GoogleFonts.inter(
+                                                      fontWeight: FontWeight.w700, 
+                                                      fontSize: 14,
+                                                      color: isDark ? Colors.white : Colors.black,
+                                                    ),
+                                                  ),
+                                                  const Spacer(),
+                                                  Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                    decoration: BoxDecoration(
+                                                      color: AppColors.neonBlue.withAlpha(20),
+                                                      borderRadius: BorderRadius.circular(6),
+                                                    ),
+                                                    child: Text(order.status,
+                                                      style: GoogleFonts.inter(
+                                                        fontSize: 10,
+                                                        fontWeight: FontWeight.w700,
+                                                        color: AppColors.neonBlue,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                              const SizedBox(height: 4),
+                                              Text('Adres Belirtilmemiş', 
+                                                style: GoogleFonts.inter(
+                                                  fontSize: 12, 
+                                                  color: AppColors.textSecondary,
+                                                ),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
                                 );
                               },
                             ),
@@ -818,167 +879,6 @@ class _ActiveOrdersList extends StatelessWidget {
       ),
     );
   }
-}
-
-class _OrderCard extends StatelessWidget {
-  const _OrderCard({required this.order, required this.isSelected});
-  final _OrderData order;
-  final bool isSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgColors = isDark 
-        ? (isSelected ? AppColors.cardBackground.withAlpha(180) : AppColors.cardBackground.withAlpha(120))
-        : (isSelected ? AppColors.lightCard.withAlpha(220) : AppColors.lightCard.withAlpha(180));
-    
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(14),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: bgColors,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: Colors.transparent),
-            boxShadow: isSelected 
-              ? [
-                  BoxShadow(
-                    color: AppColors.neonTeal.withAlpha(40),
-                    blurRadius: 15,
-                    spreadRadius: 1,
-                  )
-                ]
-              : [
-                  BoxShadow(
-                    color: AppColors.cardBorder.withAlpha(isDark ? 20 : 60),
-                    blurRadius: 10,
-                  )
-                ],
-          ),
-          child: Row(
-            children: [
-              // Sol ikon kutusu
-              Container(
-                width: 44, height: 44,
-                decoration: BoxDecoration(
-                  color: order.statusColor.withAlpha(15),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(Icons.inventory_2_rounded,
-                    color: order.statusColor, size: 20),
-              ),
-              const SizedBox(width: 14),
-              // Orta bilgiler
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Text(order.id,
-                            style: GoogleFonts.inter(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.textPrimary)),
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: order.statusColor.withAlpha(20),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(order.status,
-                              style: GoogleFonts.inter(
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w700,
-                                  color: order.statusColor)),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(order.customer,
-                        style: GoogleFonts.inter(
-                            fontSize: 12, color: AppColors.textSecondary)),
-                    const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        const Icon(Icons.location_on_rounded,
-                            size: 11, color: AppColors.textLabel),
-                        const SizedBox(width: 3),
-                        Expanded(
-                          child: Text(order.address,
-                              overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.inter(
-                                  fontSize: 11,
-                                  color: AppColors.textSecondary)),
-                        ),
-                        const SizedBox(width: 8),
-                        const Icon(Icons.access_time_rounded,
-                            size: 11, color: AppColors.textLabel),
-                        const SizedBox(width: 3),
-                        Text(order.eta,
-                            style: GoogleFonts.inter(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.textPrimary)),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Veri modelleri
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _CourierData {
-  const _CourierData({
-    required this.name,
-    required this.status,
-    required this.orders,
-    required this.position,
-    required this.color,
-  });
-  final String name;
-  final String status;
-  final int orders;
-  final LatLng position;
-  final Color color;
-}
-
-class _OrderData {
-  const _OrderData({
-    required this.id,
-    required this.customer,
-    required this.address,
-    required this.status,
-    required this.courier,
-    required this.eta,
-    required this.statusColor,
-    required this.routeType,
-    required this.startPos,
-    required this.endPos,
-  });
-  final String id;
-  final String customer;
-  final String address;
-  final String status;
-  final String courier;
-  final String eta;
-  final Color statusColor;
-  final String routeType;
-  final LatLng startPos;
-  final LatLng endPos;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -8,26 +8,9 @@ import '../theme/theme.dart';
 import '../widgets/scale_tap.dart';
 import '../services/websocket_service.dart';
 
-// ── Senaryo Veri Modeli ──
-class _MockRouteData {
-  final String id;
-  final List<LatLng> points;
-  final int etaMinutes;
-  final double speed;
-  final double distanceKm;
-  final LatLng trafficPoint;
-  final List<String> locationTexts;
-
-  _MockRouteData({
-    required this.id,
-    required this.points,
-    required this.etaMinutes,
-    required this.speed,
-    required this.distanceKm,
-    required this.trafficPoint,
-    required this.locationTexts,
-  });
-}
+import '../models/tracking_model.dart';
+import '../services/tracking_service.dart';
+import '../services/maps_service.dart';
 
 class ClientTrackingScreen extends StatefulWidget {
   final String trackingNumber;
@@ -38,81 +21,15 @@ class ClientTrackingScreen extends StatefulWidget {
   State<ClientTrackingScreen> createState() => _ClientTrackingScreenState();
 }
 
-class _ClientTrackingScreenState extends State<ClientTrackingScreen> with SingleTickerProviderStateMixin {
-  late AnimationController _vehicleCtrl;
-  late Animation<double> _vehicleAnim;
+class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
   final MapController _mapController = MapController();
   final DraggableScrollableController _sheetCtrl = DraggableScrollableController();
 
-  // ── Mock Veritabanı (Senaryolar) ──
-  static final List<_MockRouteData> _scenarios = [
-    _MockRouteData(
-      id: "LOOP-101",
-      points: [
-        const LatLng(40.9903, 29.0203), // Kadıköy
-        const LatLng(40.9920, 29.0220),
-        const LatLng(40.9945, 29.0210),
-        const LatLng(40.9980, 29.0180),
-        const LatLng(41.0005, 29.0160), // Haydarpaşa
-        const LatLng(41.0035, 29.0145), // Harem
-        const LatLng(41.0060, 29.0130), 
-        const LatLng(41.0100, 29.0125), 
-        const LatLng(41.0135, 29.0120),
-        const LatLng(41.0170, 29.0130), // Salacak
-        const LatLng(41.0200, 29.0135),
-        const LatLng(41.0225, 29.0140),
-        const LatLng(41.0250, 29.0145),
-        const LatLng(41.0263, 29.0153), // Üsküdar
-      ],
-      etaMinutes: 34,
-      speed: 42.0,
-      distanceKm: 8.4,
-      trafficPoint: const LatLng(41.0060, 29.0130),
-      locationTexts: ["Kadıköy", "Harem Sahil Yolu", "Salacak, Üsküdar"],
-    ),
-    _MockRouteData(
-      id: "LOOP-102",
-      points: [
-        const LatLng(41.0422, 29.0060), // Beşiktaş
-        const LatLng(41.0450, 29.0050),
-        const LatLng(41.0480, 29.0060),
-        const LatLng(41.0520, 29.0075),
-        const LatLng(41.0560, 29.0085),
-        const LatLng(41.0600, 29.0100),
-        const LatLng(41.0640, 29.0110),
-        const LatLng(41.0680, 29.0125),
-        const LatLng(41.0720, 29.0135),
-        const LatLng(41.0760, 29.0140), // Levent
-      ],
-      etaMinutes: 18,
-      speed: 35.0,
-      distanceKm: 4.2,
-      trafficPoint: const LatLng(41.0560, 29.0085),
-      locationTexts: ["Beşiktaş Meydan", "Barbaros Bulvarı", "Levent, Zincirlikuyu"],
-    ),
-    _MockRouteData(
-      id: "LOOP-103",
-      points: [
-        const LatLng(40.9780, 28.8730), // Bakırköy
-        const LatLng(40.9800, 28.8780),
-        const LatLng(40.9820, 28.8830),
-        const LatLng(40.9840, 28.8880),
-        const LatLng(40.9860, 28.8930),
-        const LatLng(40.9880, 28.8980),
-        const LatLng(40.9890, 28.9030), // Zeytinburnu
-      ],
-      etaMinutes: 24,
-      speed: 50.0,
-      distanceKm: 5.8,
-      trafficPoint: const LatLng(40.9840, 28.8880),
-      locationTexts: ["Bakırköy Sahil", "Veliefendi Yolu", "Zeytinburnu"],
-    ),
-  ];
-
-  late _MockRouteData _currentScenario;
-  late List<LatLng> _routePoints;
-  final List<double> _cumulativeDistances = [];
-  double _totalDistance = 0.0;
+  ActiveOrderModel? _order;
+  List<LatLng> _routePoints = [];
+  LatLng? _currentPos;
+  double _fraction = 0.0;
+  double _totalDistance = 1.0;
   
   bool _isDroneMode = false;
   bool _hasNotifiedTraffic = false;
@@ -123,87 +40,72 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> with Single
   @override
   void initState() {
     super.initState();
+    _initData();
+  }
 
-    // Gerçek zamanlı WebSocket bağlantısı
-    wsService.connect(widget.trackingNumber); // Order ID or User ID
-    wsService.onMessageReceived = (data) {
-      if (data['type'] == 'location_update') {
-        // Gerçek koordinatlar geldiğinde UI güncellenecek
-        print("Real location received: ${data['lat']}, ${data['lon']}");
-        // TODO: _currentPos = LatLng(data['lat'], data['lon']);
-        // TODO: setState(() {});
+  Future<void> _initData() async {
+    // Fetch active couriers to find our order
+    final couriers = await trackingService.getActiveCouriers();
+    ActiveOrderModel? targetOrder;
+    
+    for (var c in couriers) {
+      for (var o in c.activeOrders) {
+        if (o.orderId.toString() == widget.trackingNumber) {
+          targetOrder = o;
+          break;
+        }
       }
-    };
-
-    // Dinamik Senaryo Seçimi
-    try {
-      _currentScenario = _scenarios.firstWhere((s) => s.id == widget.trackingNumber);
-    } catch (e) {
-      // Eğer geçersiz/random bir numara girildiyse rastgele bir senaryo seç
-      _currentScenario = _scenarios[math.Random().nextInt(_scenarios.length)];
+      if (targetOrder != null) break;
     }
     
-    _routePoints = _currentScenario.points;
-    
-    // Rota mesafelerini hesapla
-    double currentDist = 0.0;
-    _cumulativeDistances.add(0.0);
-    const distanceCalc = Distance();
-    for (int i = 0; i < _routePoints.length - 1; i++) {
-      double dist = distanceCalc.as(LengthUnit.Meter, _routePoints[i], _routePoints[i + 1]);
-      currentDist += dist;
-      _cumulativeDistances.add(currentDist);
+    // Fallback if not found (for dev/testing)
+    if (targetOrder == null && couriers.isNotEmpty && couriers.first.activeOrders.isNotEmpty) {
+      targetOrder = couriers.first.activeOrders.first;
     }
-    _totalDistance = currentDist;
 
-    // Uzun soluklu pürüzsüz animasyon (sanki yavaş ilerliyormuş gibi 150 saniye / 2.5 dakika)
-    _vehicleCtrl = AnimationController(
-      vsync: this, 
-      duration: const Duration(seconds: 150)
-    )..forward();
-    
-    _vehicleAnim = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _vehicleCtrl, curve: Curves.easeInOutCubic)
-    );
-
-    // Animasyon dinleyicisi: Dinamik harita olayları ve Toast/Snackbar bildirimleri
-    _vehicleCtrl.addListener(() {
-      final double v = _vehicleAnim.value;
+    if (targetOrder != null) {
+      _order = targetOrder;
+      _currentPos = LatLng(targetOrder.pickupLatitude, targetOrder.pickupLongitude);
       
-      // %30 ilerlemede yol çalışması / AI rota bildirimi
-      if (v > 0.3 && !_hasNotifiedTraffic) {
-        _hasNotifiedTraffic = true;
-        _showSituationalToast("⚠️ İlerideki yol çalışması algılandı. AI alternatif rotayı kullanıyor.");
-      }
+      // Fetch real route from maps_service
+      final route = await mapsService.getRoutePoints(
+        _currentPos!,
+        LatLng(targetOrder.deliveryLatitude, targetOrder.deliveryLongitude)
+      );
       
-      // %60 ilerlemede hava durumu bildirimi
-      if (v > 0.6 && !_hasNotifiedWeather) {
-        _hasNotifiedWeather = true;
-        _showSituationalToast("⛈️ Hafif yağış tespit edildi. Paket koruma kalkanı aktif.");
-      }
-      
-      // %85 ilerlemede Yakınlık Bildirimi (Proximity Alert)
-      if (v > 0.85 && !_hasNotifiedArrival) {
-        _hasNotifiedArrival = true;
-        setState(() {
-          _showArrivalCard = true;
-        });
-        // 5 saniye sonra bildirimi otomatik gizle
-        Future.delayed(const Duration(seconds: 5), () {
-          if (mounted) {
-            setState(() {
-              _showArrivalCard = false;
-            });
+      setState(() {
+        _routePoints = route;
+        if (route.isNotEmpty) {
+          const distanceCalc = Distance();
+          _totalDistance = 0.0;
+          for (int i = 0; i < route.length - 1; i++) {
+            _totalDistance += distanceCalc.as(LengthUnit.Meter, route[i], route[i + 1]);
           }
-        });
-      }
-    });
+          if (_totalDistance == 0) _totalDistance = 1.0;
+        }
+      });
+      
+      // Start WebSocket
+      wsService.connect(targetOrder.orderId.toString());
+      wsService.onMessageReceived = (data) {
+        if (data['type'] == 'location_update' && data['order_id'].toString() == targetOrder!.orderId.toString()) {
+          setState(() {
+            _currentPos = LatLng(data['lat'], data['lon']);
+            
+            // Calculate fraction
+            if (_routePoints.isNotEmpty) {
+              final distRemaining = const Distance().as(LengthUnit.Meter, _currentPos!, _routePoints.last).toDouble();
+              _fraction = (1.0 - (distRemaining / _totalDistance)).clamp(0.0, 1.0);
+            }
+          });
+        }
+      };
+    }
   }
 
   @override
   void dispose() {
     wsService.disconnect();
-    _vehicleCtrl.dispose();
     _mapController.dispose();
     _sheetCtrl.dispose();
     super.dispose();
@@ -321,56 +223,25 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> with Single
         children: [
           // ── Harita (OSM TileLayer) ──
           Positioned.fill(
-            child: AnimatedBuilder(
-              animation: _vehicleAnim,
-              builder: (context, child) {
-                final double fraction = _vehicleAnim.value;
-                final double targetDist = fraction * _totalDistance;
-                
-                int segmentIndex = 0;
-                for (int i = 0; i < _cumulativeDistances.length - 1; i++) {
-                  if (targetDist >= _cumulativeDistances[i] && targetDist <= _cumulativeDistances[i + 1]) {
-                    segmentIndex = i;
-                    break;
-                  }
+            child: Builder(
+              builder: (context) {
+                if (_routePoints.isEmpty || _currentPos == null) {
+                  return const Center(
+                    child: CircularProgressIndicator(color: AppColors.neonTeal),
+                  );
                 }
-                if (targetDist > _totalDistance) segmentIndex = _routePoints.length - 2;
-
-                final double segLen = _cumulativeDistances[segmentIndex + 1] - _cumulativeDistances[segmentIndex];
-                final double segmentFraction = segLen == 0 ? 0 : (targetDist - _cumulativeDistances[segmentIndex]) / segLen;
                 
-                final LatLng startP = _routePoints[segmentIndex];
-                final LatLng endP = _routePoints[segmentIndex + 1];
-
-                final double lat = startP.latitude + (endP.latitude - startP.latitude) * segmentFraction;
-                final double lng = startP.longitude + (endP.longitude - startP.longitude) * segmentFraction;
-                final LatLng currentPos = LatLng(lat, lng);
-
-                final double bearing = const Distance().bearing(startP, endP);
-                final double angle = bearing * math.pi / 180.0;
-
-                final List<LatLng> passedRoute = [];
-                for (int i = 0; i <= segmentIndex; i++) {
-                  passedRoute.add(_routePoints[i]);
-                }
-                passedRoute.add(currentPos);
-
-                final List<LatLng> remainingRoute = [currentPos];
-                for (int i = segmentIndex + 1; i < _routePoints.length; i++) {
-                  remainingRoute.add(_routePoints[i]);
-                }
-
-                // Dinamik marker pozisyonları hesapla
-                final LatLng constructionMarker1 = _routePoints[(_routePoints.length * 0.5).toInt()];
-                final LatLng constructionMarker2 = _routePoints[(_routePoints.length * 0.6).toInt()];
+                final double fraction = _fraction;
+                final LatLng currentPos = _currentPos!;
                 
-                // Başlangıç merkezi olarak rotanın ortasını kullan
-                final LatLng mapCenter = _routePoints[(_routePoints.length ~/ 2)];
+                // Başlangıç merkezi olarak kuryenin anlık konumunu veya pickup
+                final LatLng mapCenter = currentPos;
 
                 return FlutterMap(
                   mapController: _mapController,
                   options: MapOptions(
-                    initialCenter: mapCenter, // Dinamik orta nokta
+                    initialCenter: mapCenter,
+
                     initialZoom: 13.5,
                   ),
                   children: [
@@ -389,37 +260,11 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> with Single
                         color: const Color(0xFF061525).withAlpha(150),
                       ),
                     ),
-                    
-                    // Yoğun Trafik Bölgesi (Kırmızı CircleLayer) - Dinamik Senaryoya Göre
-                    CircleLayer(
-                      circles: [
-                        CircleMarker(
-                          point: _currentScenario.trafficPoint,
-                          color: const Color(0xFFFF0000).withOpacity(0.3),
-                          borderColor: const Color(0xFFFF0000).withOpacity(0.6),
-                          borderStrokeWidth: 1.5,
-                          radius: 350,
-                          useRadiusInMeter: true,
-                        ),
-                      ],
-                    ),
-
-                    // Gelecek Rota (Gri ve ince)
+                    // Geçilmiş ve Gelecek Rotayı basitçe göster (Şimdilik tek renk)
                     PolylineLayer(
                       polylines: <Polyline>[
                         Polyline(
-                          points: remainingRoute,
-                          color: Colors.grey.withOpacity(0.4),
-                          strokeWidth: 3.0,
-                        ),
-                      ],
-                    ),
-                    
-                    // Geçilmiş Rota (Neon Turkuaz ve kalın)
-                    PolylineLayer(
-                      polylines: <Polyline>[
-                        Polyline(
-                          points: passedRoute,
+                          points: _routePoints,
                           color: AppColors.neonTeal,
                           strokeWidth: 5.0,
                         ),
@@ -428,6 +273,7 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> with Single
 
                     MarkerLayer(
                       markers: [
+
                         // Başlangıç Noktası
                         Marker(
                           point: _routePoints.first,
@@ -455,67 +301,13 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> with Single
                             ),
                           ),
                         ),
-
-                        // Yol Çalışması Marker 1
-                        Marker(
-                          point: constructionMarker1,
-                          width: 80,
-                          height: 60,
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(6),
-                                decoration: BoxDecoration(
-                                  color: Colors.orange,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: Colors.black, width: 2),
-                                  boxShadow: [
-                                    BoxShadow(color: Colors.orange.withOpacity(0.6), blurRadius: 10, spreadRadius: 2)
-                                  ],
-                                ),
-                                child: const Icon(Icons.construction_rounded, color: Colors.black, size: 16),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                "Yol Çalışması",
-                                style: GoogleFonts.inter(
-                                  color: Colors.white,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w800,
-                                  shadows: [const Shadow(color: Colors.black, blurRadius: 4)],
-                                ),
-                              )
-                            ],
-                          ),
-                        ),
-
-                        // Yol Çalışması Marker 2 (Biraz ilerde uyarı)
-                        Marker(
-                          point: constructionMarker2,
-                          width: 40,
-                          height: 40,
-                          child: Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: BoxDecoration(
-                              color: Colors.orange,
-                              shape: BoxShape.circle,
-                              border: Border.all(color: Colors.black, width: 2),
-                              boxShadow: [
-                                BoxShadow(color: Colors.orange.withOpacity(0.5), blurRadius: 8, spreadRadius: 1)
-                              ],
-                            ),
-                            child: const Icon(Icons.warning_rounded, color: Colors.black, size: 14),
-                          ),
-                        ),
-
                         // Araç Marker'ı
                         Marker(
                           point: currentPos,
                           width: 60,
                           height: 60,
                           child: Transform.rotate(
-                            angle: angle,
+                            angle: 0, // Rotation could be calculated if we have old pos
                             child: Container(
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
@@ -737,27 +529,22 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> with Single
           ),
 
           // ── Gerçek Zamanlı Müşteri Paneli (DraggableScrollableSheet) ──
-          AnimatedBuilder(
-            animation: _vehicleAnim,
-            builder: (context, child) {
-              final double fraction = _vehicleAnim.value;
+          Builder(
+            builder: (context) {
+              final double fraction = _fraction;
               
               // Dinamik hesaplamalar
-              final int baseEta = _currentScenario.etaMinutes;
-              final double baseSpeed = _currentScenario.speed;
-              final double baseDistance = _currentScenario.distanceKm;
+              final int baseEta = 30; // Varsayılan 30 dk
+              final double baseDistance = _totalDistance / 1000.0;
+              final double baseSpeed = 40.0; // Varsayılan hız
               
-              // Kalan süre ve mesafe hesaplamaları (Drone Modu optimizasyonu ile)
+              // Kalan süre ve mesafe hesaplamaları
               final int minutesRemaining = ((1.0 - fraction) * (_isDroneMode ? baseEta * 0.75 : baseEta)).ceil();
               final double kmRemaining = ((1.0 - fraction) * baseDistance);
               final double speed = _isDroneMode ? baseSpeed * 1.5 : baseSpeed;
               
               // Canlı Konum metni (İlerlemeye göre değişir)
-              final String currentLocation = fraction < 0.33 
-                  ? _currentScenario.locationTexts[0] 
-                  : fraction < 0.66 
-                      ? _currentScenario.locationTexts[1] 
-                      : _currentScenario.locationTexts[2];
+              final String currentLocation = _order != null ? _order!.deliveryAddress.split(',').first : "Bilinmeyen Konum";
 
               return DraggableScrollableSheet(
                 controller: _sheetCtrl,
