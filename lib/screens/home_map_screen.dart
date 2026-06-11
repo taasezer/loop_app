@@ -36,6 +36,7 @@ class _HomeMapScreenState extends State<HomeMapScreen>
   List<ActiveCourierModel> _couriers = [];
   List<ActiveOrderModel> _activeOrders = [];
   DashboardStats _stats = DashboardStats.empty();
+  List<CourierPerformance> _leaderboard = [];
   Timer? _refreshTimer;
 
   void _onOptimizeRoutes() {
@@ -52,9 +53,11 @@ class _HomeMapScreenState extends State<HomeMapScreen>
   Future<void> _fetchData() async {
     final couriers = await trackingService.getActiveCouriers();
     final stats = await analyticsService.getDashboardStats();
+    final leaderboard = await analyticsService.getLeaderboard();
     if (mounted) {
       setState(() {
         _stats = stats;
+        _leaderboard = leaderboard;
         _couriers = couriers;
         _activeOrders = [];
         for (var c in couriers) {
@@ -871,7 +874,7 @@ class _ActiveOrdersList extends StatelessWidget {
                                 );
                               },
                             ),
-                            const _PerformanceLeaderboard(),
+                            _PerformanceLeaderboard(leaderboard: _leaderboard),
                           ],
                         ),
                       ),
@@ -958,22 +961,24 @@ class _CorporateMarker extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _PerformanceLeaderboard extends StatelessWidget {
-  const _PerformanceLeaderboard({super.key});
+  const _PerformanceLeaderboard({required this.leaderboard});
+  final List<CourierPerformance> leaderboard;
 
   @override
   Widget build(BuildContext context) {
-    final couriers = [
-      {'name': 'Kurye Mehmet S.', 'score': '98/100', 'status': 'Aktif', 'color': const Color(0xFF4DBFB0)},
-      {'name': 'Otonom Drone X1', 'score': '95/100', 'status': 'Şarjda', 'color': AppColors.neonBlue},
-      {'name': 'Filo Kamyon #4', 'score': '88/100', 'status': 'Aktif', 'color': AppColors.textAccent},
-    ];
+    if (leaderboard.isEmpty) {
+      return Center(
+        child: Text("Veri bulunamadı", style: GoogleFonts.inter(color: Colors.white54)),
+      );
+    }
 
     return ListView.separated(
       physics: const BouncingScrollPhysics(),
-      itemCount: couriers.length,
+      itemCount: leaderboard.length,
       separatorBuilder: (context, index) => const SizedBox(height: 10),
       itemBuilder: (context, index) {
-        final c = couriers[index];
+        final c = leaderboard[index];
+        final color = c.isOnline ? AppColors.neonBlue : AppColors.textAccent;
         return Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
@@ -983,20 +988,20 @@ class _PerformanceLeaderboard extends StatelessWidget {
           child: Row(
             children: [
               CircleAvatar(
-                backgroundColor: (c['color'] as Color).withAlpha(30),
-                child: Icon(Icons.person, color: c['color'] as Color, size: 20),
+                backgroundColor: color.withAlpha(30),
+                child: Icon(Icons.person, color: color, size: 20),
               ),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(c['name'] as String, style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-                    Text('Teslimat Skoru', style: GoogleFonts.inter(fontSize: 10, color: AppColors.textSecondary)),
+                    Text('Kurye #${c.courierId}', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                    Text('Skor: ${c.rating.toStringAsFixed(1)} | ${c.deliveries} Teslimat', style: GoogleFonts.inter(fontSize: 10, color: AppColors.textSecondary)),
                   ],
                 ),
               ),
-              Text(c['score'] as String, style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w900, color: AppColors.textPrimary)),
+              Text('₺${c.revenue.toInt()}', style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w900, color: AppColors.textPrimary)),
             ],
           ),
         );

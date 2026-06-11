@@ -30,6 +30,32 @@ class DashboardStats {
   }
 }
 
+class CourierPerformance {
+  final int courierId;
+  final int deliveries;
+  final double rating;
+  final double revenue;
+  final bool isOnline;
+
+  CourierPerformance({
+    required this.courierId,
+    required this.deliveries,
+    required this.rating,
+    required this.revenue,
+    required this.isOnline,
+  });
+
+  factory CourierPerformance.fromJson(Map<String, dynamic> json) {
+    return CourierPerformance(
+      courierId: json['courier_id'] ?? 0,
+      deliveries: json['deliveries'] ?? 0,
+      rating: (json['rating'] as num?)?.toDouble() ?? 0.0,
+      revenue: (json['revenue_generated'] as num?)?.toDouble() ?? 0.0,
+      isOnline: json['is_online'] ?? false,
+    );
+  }
+}
+
 class AnalyticsService {
   static const String baseUrl = 'http://10.0.2.2:8000/api';
   final Dio _dio = Dio(BaseOptions(baseUrl: baseUrl));
@@ -83,6 +109,19 @@ class AnalyticsService {
       print('Error fetching analytics: $e');
     }
     return DashboardStats.empty();
+  }
+
+  Future<List<CourierPerformance>> getLeaderboard() async {
+    try {
+      final response = await _dio.get('/analytics/courier-performance');
+      if (response.statusCode == 200) {
+        final List topPerformers = response.data['top_performers'] ?? [];
+        return topPerformers.map((e) => CourierPerformance.fromJson(e)).toList();
+      }
+    } catch (e) {
+      print('Error fetching leaderboard: $e');
+    }
+    return [];
   }
 }
 
