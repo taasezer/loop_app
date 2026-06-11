@@ -48,6 +48,14 @@ class TrackingService {
       print('Error updating location to REST API: $e');
     }
   }
+  // Assign order using AI engine
+  Future<void> assignOrderWithAI(int orderId) async {
+    try {
+      await _dio.post('/ai/assign', data: {'order_id': orderId});
+    } catch (e) {
+      print('Error assigning order with AI: $e');
+    }
+  }
 }
 
 final trackingService = TrackingService();
