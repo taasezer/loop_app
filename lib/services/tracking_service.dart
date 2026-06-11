@@ -35,6 +35,19 @@ class TrackingService {
     }
     return [];
   }
+
+  // Update courier location via REST API (to save to DB)
+  Future<void> updateLocation(int courierId, double lat, double lng) async {
+    try {
+      await _dio.post('/tracking/update', data: {
+        'courier_id': courierId,
+        'latitude': lat,
+        'longitude': lng,
+      });
+    } catch (e) {
+      print('Error updating location to REST API: $e');
+    }
+  }
 }
 
 final trackingService = TrackingService();

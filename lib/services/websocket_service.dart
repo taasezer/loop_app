@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:geolocator/geolocator.dart';
+import '../services/tracking_service.dart';
 
 class WebSocketService {
   static const String wsUrl = 'ws://10.0.2.2:8000/ws';
@@ -40,7 +41,7 @@ class WebSocketService {
     }
   }
 
-  void sendLocationUpdate(String orderId, Position position) {
+  void sendLocationUpdate(String orderId, Position position, {int? courierId}) {
     if (_channel != null) {
       _channel!.sink.add(json.encode({
         'type': 'location_update',
@@ -48,6 +49,11 @@ class WebSocketService {
         'lat': position.latitude,
         'lon': position.longitude,
       }));
+      
+      // Send location to REST API as well to save in DB
+      if (courierId != null) {
+        trackingService.updateLocation(courierId, position.latitude, position.longitude);
+      }
     }
   }
 
