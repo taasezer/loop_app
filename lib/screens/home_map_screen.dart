@@ -10,6 +10,7 @@ import '../widgets/scale_tap.dart';
 import '../services/websocket_service.dart';
 import '../services/maps_service.dart'; // Added
 import '../services/tracking_service.dart'; // Added
+import '../services/analytics_service.dart'; // Added
 import '../models/tracking_model.dart'; // Added
 import '../utils/localization.dart';
 import '../state/app_state_provider.dart';
@@ -34,6 +35,7 @@ class _HomeMapScreenState extends State<HomeMapScreen>
 
   List<ActiveCourierModel> _couriers = [];
   List<ActiveOrderModel> _activeOrders = [];
+  DashboardStats _stats = DashboardStats.empty();
   Timer? _refreshTimer;
 
   void _onOptimizeRoutes() {
@@ -49,8 +51,10 @@ class _HomeMapScreenState extends State<HomeMapScreen>
 
   Future<void> _fetchData() async {
     final couriers = await trackingService.getActiveCouriers();
+    final stats = await analyticsService.getDashboardStats();
     if (mounted) {
       setState(() {
+        _stats = stats;
         _couriers = couriers;
         _activeOrders = [];
         for (var c in couriers) {
@@ -114,8 +118,7 @@ class _HomeMapScreenState extends State<HomeMapScreen>
                 child: Column(
                   children: [
                     _MapAppBar(),
-                    const SizedBox(height: 8),
-                    const _AILiveTicker(),
+                    const SizedBox(height: 10),
                     Padding(
                       padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
                       child: ClipRRect(
@@ -141,7 +144,7 @@ class _HomeMapScreenState extends State<HomeMapScreen>
                         ),
                       ),
                     ),
-                    _StatsBar(),
+                    _StatsBar(stats: _stats),
                   ],
                 ),
               ),
@@ -259,6 +262,9 @@ class _MapAppBar extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _StatsBar extends StatelessWidget {
+  const _StatsBar({required this.stats});
+  final DashboardStats stats;
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -268,46 +274,46 @@ class _StatsBar extends StatelessWidget {
         physics: const BouncingScrollPhysics(),
         child: Row(
           children: [
-            const _StatChip(
+            _StatChip(
               icon: Icons.local_shipping_rounded,
-              value: '24',
+              value: '${stats.activeCouriers}',
               label: 'Aktif Araç',
               color: AppColors.textAccent,
             ),
             const SizedBox(width: 10),
-            const _StatChip(
+            _StatChip(
               icon: Icons.check_circle_rounded,
-              value: '18',
+              value: '${stats.deliveredOrders}',
               label: 'Tamamlanan',
-              color: Color(0xFF4DBFB0),
+              color: const Color(0xFF4DBFB0),
             ),
             const SizedBox(width: 10),
-            const _StatChip(
+            _StatChip(
               icon: Icons.warning_rounded,
-              value: '2',
-              label: 'Geciken',
-              color: Color(0xFFFFAA00),
+              value: '${stats.delayedOrders}',
+              label: 'Bekleyen/Geciken',
+              color: const Color(0xFFFFAA00),
             ),
             const SizedBox(width: 10),
-            const _StatChip(
-              icon: Icons.eco_rounded,
-              value: '₺12.4K',
-              label: 'Yakıt Tasarrufu',
-              color: Color(0xFF4DBFB0),
+            _StatChip(
+              icon: Icons.account_balance_wallet_rounded,
+              value: '₺${(stats.totalRevenue / 1000).toStringAsFixed(1)}K',
+              label: 'Toplam Ciro',
+              color: const Color(0xFF4DBFB0),
             ),
             const SizedBox(width: 10),
-            const _StatChip(
+            _StatChip(
               icon: Icons.timer_rounded,
-              value: '%18',
-              label: 'Kazanılan Zaman',
-              color: Color(0xFF9B7FFF),
+              value: '%${stats.successRate.toInt()}',
+              label: 'Başarı Oranı',
+              color: const Color(0xFF9B7FFF),
             ),
             const SizedBox(width: 10),
-            const _StatChip(
-              icon: Icons.co2_rounded,
-              value: '1.4 Ton',
+            _StatChip(
+              icon: Icons.eco_rounded,
+              value: '${(stats.totalOrders * 0.1).toStringAsFixed(1)} Ton',
               label: 'Önlenen Emisyon',
-              color: Color(0xFF00FFCC),
+              color: const Color(0xFF00FFCC),
             ),
           ],
         ),
@@ -943,92 +949,6 @@ class _CorporateMarker extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// AI Canlı Uyarı Ticker'ı (Marquee)
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _AILiveTicker extends StatefulWidget {
-  const _AILiveTicker({super.key});
-
-  @override
-  State<_AILiveTicker> createState() => _AILiveTickerState();
-}
-
-class _AILiveTickerState extends State<_AILiveTicker> {
-  final List<String> _messages = [
-    "⚠️ FSM Köprüsü'nde yoğun trafik: 3 otonom araç yeni rotaya aktarıldı.",
-    "✅ AI Rota Optimizasyonu ile genel gecikmeler %18 azaltıldı.",
-    "⛈️ Şiddetli hava uyarısı: Kuzey Marmara drone teslimatları askıya alındı.",
-  ];
-  int _currentIndex = 0;
-  Timer? _timer;
-
-  @override
-  void initState() {
-    super.initState();
-    _timer = Timer.periodic(const Duration(seconds: 4), (timer) {
-      if (mounted) {
-        setState(() => _currentIndex = (_currentIndex + 1) % _messages.length);
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(8),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: const Color(0xFF0D1828).withAlpha(180),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: AppColors.neonBlue.withAlpha(50)),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.auto_awesome, color: AppColors.neonBlue, size: 14),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 500),
-                    transitionBuilder: (Widget child, Animation<double> animation) {
-                      return FadeTransition(
-                        opacity: animation,
-                        child: child, // Removed SlideTransition to prevent vertical bouncing, making it fade nicely.
-                      );
-                    },
-                    child: Text(
-                      _messages[_currentIndex],
-                      key: ValueKey<int>(_currentIndex),
-                      style: GoogleFonts.inter(
-                        color: AppColors.textPrimary,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

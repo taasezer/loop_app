@@ -4,6 +4,7 @@ import '../theme/theme.dart';
 import '../state/app_state_provider.dart';
 import 'onboarding_screen.dart';
 import 'settings_detail_screen.dart';
+import '../services/profile_service.dart';
 
 /// Profil sekmesi — kullanıcı bilgileri ve ayarlar.
 class ProfileScreen extends StatefulWidget {
@@ -16,6 +17,24 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   late String _name;
   late String _email;
+  PerformanceStats? _stats;
+  bool _isLoadingStats = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchStats();
+  }
+
+  Future<void> _fetchStats() async {
+    final stats = await profileService.getPerformance();
+    if (mounted) {
+      setState(() {
+        _stats = stats;
+        _isLoadingStats = false;
+      });
+    }
+  }
 
   @override
   void didChangeDependencies() {
@@ -153,7 +172,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
 
             // ── İstatistikler ─────────────────────────────────────────────────
-            _StatsRow(),
+            _isLoadingStats 
+                ? const Padding(padding: EdgeInsets.all(20), child: Center(child: CircularProgressIndicator()))
+                : _StatsRow(stats: _stats),
 
             // ── Menü ─────────────────────────────────────────────────────────
             Padding(
@@ -327,6 +348,9 @@ class _ProfileHeader extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _StatsRow extends StatelessWidget {
+  const _StatsRow({this.stats});
+  final PerformanceStats? stats;
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -341,22 +365,22 @@ class _StatsRow extends StatelessWidget {
         child: Row(
           children: [
             _StatCell(
-                value: '1.240',
+                value: stats?.completedDeliveries.toString() ?? '0',
                 label: 'Toplam\nTeslimat',
                 color: AppColors.textAccent),
             _divider(),
             _StatCell(
-                value: '4.8',
+                value: stats?.averageRating.toStringAsFixed(1) ?? '0.0',
                 label: 'Ortalama\nPuan',
                 color: const Color(0xFFFFAA00)),
             _divider(),
             _StatCell(
-                value: '%97',
+                value: '%${stats?.successRate.toInt() ?? 0}',
                 label: 'Başarı\nOranı',
                 color: const Color(0xFF9B7FFF)),
             _divider(),
             _StatCell(
-                value: '18 ay',
+                value: '${stats?.membershipMonths ?? 1} ay',
                 label: 'Üyelik\nSüresi',
                 color: AppColors.textAccent),
           ],
