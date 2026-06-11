@@ -168,7 +168,10 @@ class _OrdersScreenState extends State<OrdersScreen>
                           padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
                           itemCount: currentList.length,
                           separatorBuilder: (context, idx) => const SizedBox(height: 10),
-                          itemBuilder: (_, i) => _OrderCard(order: currentList[i]),
+                          itemBuilder: (_, i) => _OrderCard(
+                            order: currentList[i],
+                            onRefresh: _fetchOrders,
+                          ),
                         ),
                       );
                     },
@@ -298,8 +301,9 @@ class _MetricBox extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _OrderCard extends StatelessWidget {
-  const _OrderCard({required this.order});
+  const _OrderCard({required this.order, required this.onRefresh});
   final OrderModel order;
+  final VoidCallback onRefresh;
 
   Color _getStatusColor() {
     switch (order.status) {
@@ -408,6 +412,46 @@ class _OrderCard extends StatelessWidget {
                       color: statusColor)),
             ],
           ),
+          if (order.status == 'assigned') ...[
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.redAccent.withAlpha(20),
+                      foregroundColor: Colors.redAccent,
+                      elevation: 0,
+                    ),
+                    onPressed: () async {
+                      final success = await orderService.rejectOrder(order.id.toString());
+                      if (success) {
+                        onRefresh();
+                      }
+                    },
+                    child: Text('Reddet', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF9B7FFF),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                    ),
+                    onPressed: () async {
+                      final success = await orderService.acceptOrder(order.id.toString());
+                      if (success) {
+                        onRefresh();
+                      }
+                    },
+                    child: Text('Kabul Et', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );

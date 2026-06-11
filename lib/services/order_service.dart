@@ -44,6 +44,17 @@ class OrderService {
     }
   }
 
+  // Reject an order
+  Future<bool> rejectOrder(String orderId) async {
+    try {
+      final response = await _dio.post('/courier/orders/$orderId/reject');
+      return response.statusCode == 200 || response.statusCode == 201;
+    } catch (e) {
+      print('Error rejecting order: $e');
+      return false;
+    }
+  }
+
   // Update order status (pickup, start delivery, complete)
   Future<bool> updateOrderStatus(String orderId, String action) async {
     try {
