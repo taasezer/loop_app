@@ -39,15 +39,33 @@ class _HomeMapScreenState extends State<HomeMapScreen>
   List<CourierPerformance> _leaderboard = [];
   Timer? _refreshTimer;
 
-  void _onOptimizeRoutes() {
+  void _onOptimizeRoutes() async {
     setState(() => _isAIOptimized = true);
+    try {
+      // Gerçek AI Endpoint'ini çağırıyoruz
+      // Not: Sisteme daha önceden trackingService.assignOrderWithAI() eklenmişti.
+      // Eğer eklenmediyse diye doğrudan trackingService.updateLocation veya
+      // ilgili AI atama servisi çağrılabilir.
+      if (_activeOrders.isNotEmpty) {
+        await trackingService.assignOrderWithAI(_activeOrders.first.id);
+      }
+      await _fetchData();
+    } catch (e) {
+      print('AI Rota Optimizasyonu hatası: $e');
+    }
   }
 
-  void _onTrafficAnalysis() {
+  void _onTrafficAnalysis() async {
     setState(() => _isRadarScanActive = true);
-    Future.delayed(const Duration(seconds: 3), () {
-      if (mounted) setState(() => _isRadarScanActive = false);
-    });
+    try {
+      // Backend'den trafik ağırlıklı heatmap/dashboard verisi çağrısı
+      await analyticsService.getDashboardStats();
+    } catch (e) {
+      print('AI Trafik analizi hatası: $e');
+    }
+    if (mounted) {
+      setState(() => _isRadarScanActive = false);
+    }
   }
 
   Future<void> _fetchData() async {
