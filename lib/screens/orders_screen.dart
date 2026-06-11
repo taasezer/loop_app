@@ -21,6 +21,13 @@ class _OrdersScreenState extends State<OrdersScreen>
   List<OrderModel> _myOrders = [];
   bool _isLoading = true;
 
+  int get _activeCount => _myOrders.where((o) => ['picked_up', 'in_transit'].contains(o.status)).length;
+  int get _pendingCount => _myOrders.where((o) => ['assigned'].contains(o.status)).length;
+  int get _completedCount => _myOrders.where((o) => ['delivered'].contains(o.status)).length;
+  double get _dailyRevenue => _myOrders
+      .where((o) => ['delivered'].contains(o.status))
+      .fold(0.0, (sum, o) => sum + (o.totalAmount ?? 0.0));
+
   @override
   void initState() {
     super.initState();
@@ -76,7 +83,7 @@ class _OrdersScreenState extends State<OrdersScreen>
                               fontWeight: FontWeight.w900,
                               color: cs.onSurface,
                               letterSpacing: -0.3)),
-                      Text('Bugün 34 sipariş',
+                      Text('Bugün ${_myOrders.length} sipariş',
                           style: GoogleFonts.inter(
                               fontSize: 12,
                               color: cs.onSurface.withAlpha(130))),
@@ -115,16 +122,16 @@ class _OrdersScreenState extends State<OrdersScreen>
               padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
               child: Row(
                 children: [
-                  _MetricBox(value: '6', label: 'Aktif',
+                  _MetricBox(value: '$_activeCount', label: 'Aktif',
                       color: AppColors.textAccent),
                   const SizedBox(width: 8),
-                  _MetricBox(value: '2', label: 'Beklemede',
+                  _MetricBox(value: '$_pendingCount', label: 'Beklemede',
                       color: const Color(0xFF9B7FFF)),
                   const SizedBox(width: 8),
-                  _MetricBox(value: '26', label: 'Tamamlanan',
+                  _MetricBox(value: '$_completedCount', label: 'Tamamlanan',
                       color: const Color(0xFFFFAA00)),
                   const SizedBox(width: 8),
-                  _MetricBox(value: '₺4.280', label: 'Günlük Ciro',
+                  _MetricBox(value: '₺${_dailyRevenue.toStringAsFixed(2)}', label: 'Günlük Ciro',
                       color: AppColors.textAccent),
                 ],
               ),
